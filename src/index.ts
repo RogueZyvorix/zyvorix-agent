@@ -20,7 +20,7 @@ const MAX_HISTORY = 30;
 
 const DEFAULT_PROMPT =
   'Kamu adalah Zyvorix, asisten AI ringkas di server. Jawab singkat dan jelas dalam Bahasa Indonesia kecuali diminta lain. ' +
-  'Gunakan tool hanya jika benar-benar dibutuhkan. Untuk run_shell pakai perintah aman dan non-interaktif. ' +
+  'Pakai web_search hanya jika butuh info terbaru atau fakta yang tidak kamu yakini, lalu web_fetch untuk membaca satu hasilnya. Pakai get_time untuk tanggal dan jam. Pakai run_shell, read_file, write_file hanya jika diminta. Untuk run_shell pakai perintah aman dan non-interaktif. ' +
   'Jika ada gambar, deskripsikan isinya dengan singkat.';
 
 interface Config {
@@ -153,6 +153,38 @@ const tools: OpenAI.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Cari info terbaru di internet. Pakai hanya jika butuh data terbaru atau fakta yang tidak pasti.',
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string', description: 'Kata kunci pencarian' } },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'web_fetch',
+      description: 'Baca isi satu halaman web dari URL lengkap (https://...), misalnya dari hasil web_search.',
+      parameters: {
+        type: 'object',
+        properties: { url: { type: 'string', description: 'URL lengkap' } },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_time',
+      description: 'Ambil tanggal dan jam sekarang (zona WIB).',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
 ];
 
 function runShell(command: string): Promise<string> {
@@ -163,6 +195,47 @@ function runShell(command: string): Promise<string> {
       resolve(clip(out || (err ? `Exit error: ${err.message}` : '(tanpa output)')));
     });
   });
+}
+
+const stripTags = (s: string) =>
+  s.replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ').trim();
+
+async function webSearch(q: string): Promise<string> {
+  const res = await fetch('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q), {
+    headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) zyvorix-agent' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return `Error: pencarian gagal (HTTP ${res.status})`;
+  const html = await res.text();
+  const items: string[] = [];
+  const re = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>)?/g;
+  let m: RegExpExecArray | null;
+  while (items.length < 5 && (m = re.exec(html))) {
+    let link = m[1];
+    const u = /uddg=([^&]+)/.exec(link);
+    if (u) link = decodeURIComponent(u[1]);
+    const title = stripTags(m[2]);
+    const snip = m[3] ? stripTags(m[3]) : '';
+    items.push(`${items.length + 1}. ${title}\n   ${link}\n   ${snip}`);
+  }
+  return items.length ? clip(items.join('\n')) : 'Tidak ada hasil.';
+}
+
+async function webFetch(url: string): Promise<string> {
+  if (!/^https?:\/\//i.test(url)) return 'Error: URL harus diawali http:// atau https://';
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 zyvorix-agent' },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return `Error: HTTP ${res.status}`;
+  const ct = res.headers.get('content-type') || '';
+  const raw = await res.text();
+  const body = ct.includes('html') ? raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ') : raw;
+  return clip(stripTags(body), 1500);
 }
 
 async function execTool(name: string, argsRaw: string): Promise<string> {
@@ -194,6 +267,18 @@ async function execTool(name: string, argsRaw: string): Promise<string> {
         fs.writeFileSync(p, content);
         return `OK, ${content.length} karakter ditulis ke ${p}`;
       }
+      case 'web_search': {
+        const q = String(args.query ?? '');
+        log('tool', `web_search: ${q}`);
+        return await webSearch(q);
+      }
+      case 'web_fetch': {
+        const u = String(args.url ?? '');
+        log('tool', `web_fetch: ${u}`);
+        return await webFetch(u);
+      }
+      case 'get_time':
+        return new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'short' }) + ' WIB';
       default:
         return `Error: tool "${name}" tidak dikenal.`;
     }
@@ -410,7 +495,7 @@ function auth(req: Request, res: Response, next: NextFunction) {
 }
 
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(PUBLIC_DIR));
 
 app.post('/api/login', (req, res) => {
@@ -510,10 +595,13 @@ app.get('/api/logs/stream', auth, (req, res) => {
 
 app.post('/api/chat', auth, async (req, res) => {
   const text = String(req.body?.message ?? '').trim();
-  if (!text) return res.status(400).json({ error: 'Pesan kosong' });
+  const images: string[] = Array.isArray(req.body?.images)
+    ? req.body.images.filter((x: unknown) => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 3)
+    : [];
+  if (!text && !images.length) return res.status(400).json({ error: 'Pesan kosong' });
   try {
-    log('web', `Dashboard: ${clip(text, 200)}`);
-    const reply = await runAgent('web', text);
+    log('web', `Dashboard: ${clip(text || '[gambar]', 200)}${images.length ? ' +gambar' : ''}`);
+    const reply = await runAgent('web', text, images);
     log('web', `→ ${clip(reply, 200)}`);
     res.json({ reply });
   } catch (e) {
