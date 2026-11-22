@@ -1,0 +1,22 @@
+{
+  "name": "zyvorix-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agen AI ringan: Discord bot + OpenAI-compatible (9Router) + Web Dashboard",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "express": "^4.21.2",
+    "openai": "^4.77.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.17.0",
+    "typescript": "^5.6.3"
+  }
+}

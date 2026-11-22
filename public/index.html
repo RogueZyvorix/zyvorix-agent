@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>zyvorix-agent Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .scroll-thin::-webkit-scrollbar { width: 6px; }
+    .scroll-thin::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+
+  <!-- LOGIN -->
+  <section id="login" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+      <h1 class="text-2xl font-bold text-white mb-1">⚡ zyvorix-agent</h1>
+      <p class="text-sm text-slate-400 mb-6">Masuk ke dashboard</p>
+      <input id="pw" type="password" placeholder="Password admin"
+        onkeydown="if(event.key==='Enter') login()"
+        class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <button onclick="login()" class="w-full bg-indigo-600 hover:bg-indigo-500 rounded-lg py-2 font-semibold">Login</button>
+      <p id="loginErr" class="text-red-400 text-sm mt-3 hidden"></p>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <section id="app" class="hidden p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-2xl font-bold text-white">⚡ zyvorix-agent</h1>
+      <button onclick="logout()" class="text-sm text-slate-400 hover:text-white">Logout</button>
+    </header>
+
+    <!-- Status cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 mb-1">Bot Discord</p>
+        <p class="font-semibold flex items-center gap-2">
+          <span id="botDot" class="inline-block w-2.5 h-2.5 rounded-full bg-red-500"></span>
+          <span id="botStatus">Offline</span>
+        </p>
+        <p id="botTag" class="text-xs text-slate-500 mt-1">-</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 mb-1">RAM Usage</p>
+        <p id="ram" class="font-semibold">-</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 mb-1">Uptime</p>
+        <p id="uptime" class="font-semibold">-</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 mb-1">Model</p>
+        <p id="modelName" class="font-semibold truncate">-</p>
+      </div>
+    </div>
+
+    <!-- Bot control -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap gap-3">
+      <button onclick="botAction('start')" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold">▶ Start</button>
+      <button onclick="botAction('stop')" class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg font-semibold">■ Stop</button>
+      <button onclick="botAction('restart')" class="bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg font-semibold">↻ Restart</button>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-6">
+
+      <!-- Konfigurasi -->
+      <form onsubmit="saveConfig(event)" class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <h2 class="text-lg font-semibold text-white">Konfigurasi</h2>
+
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Discord Bot Token</label>
+          <input id="c_discordToken" type="password" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Allowed User IDs (pisah koma)</label>
+          <input id="c_allowedUserIds" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">9Router URL</label>
+            <input id="c_baseUrl" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">9Router API Key</label>
+            <input id="c_apiKey" type="password" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Model Name</label>
+            <input id="c_model" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Password Dashboard</label>
+            <input id="c_dashboardPassword" type="password" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">System Prompt</label>
+          <textarea id="c_systemPrompt" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"></textarea>
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input id="c_toolsEnabled" type="checkbox" class="w-4 h-4" />
+          Aktifkan Tools (run_shell, read_file, write_file)
+        </label>
+        <div class="flex items-center gap-3">
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg font-semibold">Simpan & Terapkan</button>
+          <span id="saveMsg" class="text-sm"></span>
+        </div>
+      </form>
+
+      <div class="space-y-6">
+
+        <!-- Live Log -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h2 class="text-lg font-semibold text-white mb-3">Live Log</h2>
+          <div id="logs" class="scroll-thin text-xs h-64 overflow-y-auto bg-slate-950 rounded-lg p-3 space-y-1"></div>
+        </div>
+
+        <!-- Web Chat -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold text-white">Web Chat</h2>
+            <button onclick="clearChat()" class="text-xs text-slate-400 hover:text-white">🧹 Clear</button>
+          </div>
+          <div id="chat" class="scroll-thin flex flex-col gap-2 h-64 overflow-y-auto bg-slate-950 rounded-lg p-3 mb-3 text-sm"></div>
+          <form onsubmit="sendChat(event)" class="flex gap-2">
+            <input id="chatIn" type="text" placeholder="Tulis pesan..."
+              class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 px-4 rounded-lg font-semibold">Kirim</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let TOKEN = localStorage.getItem('zv_token') || '';
+  let logSource = null;
+  let statusTimer = null;
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + TOKEN,
+        ...(opts.headers || {}),
+      },
+    });
+    if (res.status === 401) { logout(); throw new Error('Sesi berakhir, silakan login ulang'); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request gagal');
+    return data;
+  }
+
+  async function login() {
+    const err = $('loginErr');
+    err.classList.add('hidden');
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: $('pw').value }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Login gagal');
+      TOKEN = d.token;
+      localStorage.setItem('zv_token', TOKEN);
+      showApp();
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.remove('hidden');
+    }
+  }
+
+  function logout() {
+    TOKEN = '';
+    localStorage.removeItem('zv_token');
+    if (logSource) logSource.close();
+    if (statusTimer) clearInterval(statusTimer);
+    location.reload();
+  }
+
+  function showApp() {
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    loadConfig();
+    loadStatus();
+    connectLogs();
+    statusTimer = setInterval(loadStatus, 3000);
+  }
+
+  function fmtUp(sec) {
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return `${h}j ${m}m ${s}d`;
+  }
+
+  async function loadStatus() {
+    try {
+      const s = await api('/api/status');
+      $('botDot').className = 'inline-block w-2.5 h-2.5 rounded-full ' + (s.botOnline ? 'bg-emerald-400' : 'bg-red-500');
+      $('botStatus').textContent = s.botOnline ? 'Online' : 'Offline';
+      $('botTag').textContent = s.botTag || '-';
+      $('ram').textContent = s.ramMB + ' MB';
+      $('uptime').textContent = fmtUp(s.uptime);
+      $('modelName').textContent = s.model;
+    } catch (e) { /* diabaikan, polling berikutnya akan mencoba lagi */ }
+  }
+
+  async function botAction(action) {
+    try {
+      await api('/api/bot/' + action, { method: 'POST' });
+    } catch (e) {
+      alert('Gagal: ' + e.message);
+    }
+    loadStatus();
+  }
+
+  async function loadConfig() {
+    try {
+      const c = await api('/api/config');
+      $('c_discordToken').value = c.discordToken;
+      $('c_discordToken').placeholder = c.discordToken ? '' : 'Belum diisi';
+      $('c_allowedUserIds').value = c.allowedUserIds.join(', ');
+      $('c_baseUrl').value = c.baseUrl;
+      $('c_apiKey').value = c.apiKey;
+      $('c_model').value = c.model;
+      $('c_dashboardPassword').value = c.dashboardPassword;
+      $('c_systemPrompt').value = c.systemPrompt;
+      $('c_toolsEnabled').checked = c.toolsEnabled;
+    } catch (e) { /* ignore */ }
+  }
+
+  function flash(text, ok) {
+    const el = $('saveMsg');
+    el.textContent = text;
+    el.className = 'text-sm ' + (ok ? 'text-emerald-400' : 'text-red-400');
+    setTimeout(() => { el.textContent = ''; }, 3000);
+  }
+
+  async function saveConfig(e) {
+    e.preventDefault();
+    const body = {
+      discordToken: $('c_discordToken').value,
+      allowedUserIds: $('c_allowedUserIds').value.split(',').map((s) => s.trim()).filter(Boolean),
+      baseUrl: $('c_baseUrl').value,
+      apiKey: $('c_apiKey').value,
+      model: $('c_model').value,
+      dashboardPassword: $('c_dashboardPassword').value,
+      systemPrompt: $('c_systemPrompt').value,
+      toolsEnabled: $('c_toolsEnabled').checked,
+    };
+    try {
+      await api('/api/config', { method: 'PUT', body: JSON.stringify(body) });
+      flash('Tersimpan & diterapkan ✔', true);
+      loadConfig();
+      loadStatus();
+    } catch (err) {
+      flash(err.message, false);
+    }
+  }
+
+  function connectLogs() {
+    if (logSource) logSource.close();
+    $('logs').innerHTML = '';
+    logSource = new EventSource('/api/logs/stream?token=' + encodeURIComponent(TOKEN));
+    logSource.onmessage = (ev) => addLog(JSON.parse(ev.data));
+  }
+
+  const LOG_COLORS = {
+    bot: 'text-emerald-400', discord: 'text-sky-400', tool: 'text-amber-300',
+    error: 'text-red-400', auth: 'text-violet-400', config: 'text-pink-400',
+    web: 'text-cyan-300', system: 'text-slate-400',
+  };
+
+  function addLog(e) {
+    const box = $('logs');
+    const row = document.createElement('div');
+    row.className = LOG_COLORS[e.type] || 'text-slate-300';
+    row.textContent = `[${e.time}] [${e.type}] ${e.msg}`;
+    box.appendChild(row);
+    while (box.childElementCount > 300) box.firstChild.remove();
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function bubble(text, who) {
+    const d = document.createElement('div');
+    d.className = who === 'user'
+      ? 'ml-auto bg-indigo-600 rounded-xl px-3 py-2 max-w-[85%] whitespace-pre-wrap break-words'
+      : 'bg-slate-800 rounded-xl px-3 py-2 max-w-[85%] whitespace-pre-wrap break-words';
+    d.textContent = text;
+    $('chat').appendChild(d);
+    $('chat').scrollTop = $('chat').scrollHeight;
+    return d;
+  }
+
+  async function sendChat(e) {
+    e.preventDefault();
+    const msg = $('chatIn').value.trim();
+    if (!msg) return;
+    $('chatIn').value = '';
+    bubble(msg, 'user');
+    const thinking = bubble('⏳ Berpikir...', 'bot');
+    try {
+      const d = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message: msg }) });
+      thinking.textContent = d.reply;
+    } catch (err) {
+      thinking.textContent = '⚠️ ' + err.message;
+      thinking.classList.add('text-red-400');
+    }
+  }
+
+  async function clearChat() {
+    try { await api('/api/chat/clear', { method: 'POST' }); } catch (e) { /* ignore */ }
+    $('chat').innerHTML = '';
+  }
+
+  if (TOKEN) showApp();
+</script>
+</body>
+</html>
