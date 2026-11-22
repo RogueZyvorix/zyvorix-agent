@@ -13,7 +13,7 @@ const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, 'data');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 46738;
 const MASK = '••••••••';
 const MAX_TOOL_ITER = 5;
 const MAX_HISTORY = 30;
@@ -85,6 +85,22 @@ function loadConfig(): Config {
 }
 
 let cfg: Config = loadConfig();
+
+// ============================================================
+// 3b. MEMORI PER USER (data/memory.json)
+// ============================================================
+const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
+type MemDB = Record<string, string[]>;
+function loadMem(): MemDB {
+  try { return JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf8')); } catch { return {}; }
+}
+function saveMem(db: MemDB) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(MEMORY_FILE, JSON.stringify(db, null, 2));
+}
+function memoryText(uid: string): string {
+  return (loadMem()[uid] ?? []).join('; ').slice(0, 300);
+}
 
 // ============================================================
 // 4. OPENAI CLIENT (9Router / OpenAI-compatible)
@@ -196,7 +212,7 @@ function trimHistory(h: OpenAI.ChatCompletionMessageParam[]) {
   while (h.length && h[0].role !== 'user') h.shift(); // jaga urutan tool_call agar valid
 }
 
-async function runAgent(key: string, text: string, images: string[] = []): Promise<string> {
+async function runAgent(key: string, text: string, images: string[] = [], userId = ''): Promise<string> {
   const h = histories.get(key) ?? [];
   histories.set(key, h);
 
@@ -208,6 +224,9 @@ async function runAgent(key: string, text: string, images: string[] = []): Promi
     : text;
   h.push({ role: 'user', content: userContent });
 
+  const mem = userId ? memoryText(userId) : '';
+  const sysPrompt = (cfg.systemPrompt || DEFAULT_PROMPT) + (mem ? `\nInfo tentang user: ${mem}` : '');
+
   // Saat ada gambar, kirim tanpa parameter tools (kompatibilitas model kecil)
   const useTools = cfg.toolsEnabled && images.length === 0;
 
@@ -215,7 +234,7 @@ async function runAgent(key: string, text: string, images: string[] = []): Promi
     const res = await openai.chat.completions.create({
       model: cfg.model,
       max_tokens: 1024,
-      messages: [{ role: 'system', content: cfg.systemPrompt || DEFAULT_PROMPT }, ...h],
+      messages: [{ role: 'system', content: sysPrompt }, ...h],
       ...(useTools ? { tools, tool_choice: 'auto' as const } : {}),
     });
 
@@ -290,6 +309,34 @@ async function onMessage(msg: Message) {
       return;
     }
 
+    const uid = msg.author.id;
+    if (text.startsWith('!ingat ')) {
+      const info = text.slice(7).trim().slice(0, 200);
+      if (!info) return void (await msg.reply('Format: `!ingat <info>`'));
+      const db = loadMem();
+      db[uid] = [...(db[uid] ?? []), info].slice(-10);
+      saveMem(db);
+      log('discord', `Memori disimpan untuk ${msg.author.tag}`);
+      await msg.reply('💾 Disimpan.');
+      return;
+    }
+    if (text === '!memori') {
+      const items = loadMem()[uid] ?? [];
+      await msg.reply(
+        items.length
+          ? '🧠 Memori kamu:\n' + items.map((x, i) => `${i + 1}. ${x}`).join('\n')
+          : 'Belum ada memori tersimpan. Gunakan `!ingat <info>`.'
+      );
+      return;
+    }
+    if (text === '!lupa') {
+      const db = loadMem();
+      delete db[uid];
+      saveMem(db);
+      await msg.reply('🗑️ Memori kamu dihapus.');
+      return;
+    }
+
     const images = msg.attachments
       .filter((a) => a.contentType?.startsWith('image/'))
       .map((a) => a.url);
@@ -298,7 +345,7 @@ async function onMessage(msg: Message) {
     log('discord', `${msg.author.tag}: ${clip(text || '[gambar]', 200)}`);
     if ('sendTyping' in msg.channel) await msg.channel.sendTyping();
 
-    const reply = await runAgent(key, text, images);
+    const reply = await runAgent(key, text, images, uid);
     log('bot', `→ ${clip(reply, 200)}`);
     for (const part of splitText(reply)) await msg.reply(part);
   } catch (e) {

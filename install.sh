@@ -96,5 +96,5 @@ fi
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 echo ""
 echo "==============================================="
-echo " Selesai! Dashboard: http://${IP:-IP-SERVER}:3000"
+echo " Selesai! Dashboard: http://${IP:-IP-SERVER}:46738"
 echo "==============================================="

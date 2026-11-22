@@ -50,7 +50,7 @@ if errorlevel 1 goto configfail
 :skipconfig
 echo.
 echo ===============================================
-echo  Setup selesai. Dashboard: http://localhost:3000
+echo  Setup selesai. Dashboard: http://localhost:46738
 echo ===============================================
 set "RUN="
 set /p "RUN=Jalankan agent sekarang di jendela baru? (Y/N): "
